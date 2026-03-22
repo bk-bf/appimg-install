@@ -15,9 +15,7 @@ When you install a new version later, only the file changes. The symlink and `.d
 ## Installation
 
 ```bash
-curl -Lo ~/.local/bin/appimg-install \
-  https://raw.githubusercontent.com/bk-bf/appimg-install/main/appimg-install
-chmod +x ~/.local/bin/appimg-install
+curl -fsSL https://raw.githubusercontent.com/bk-bf/appimg-install/main/appimg-install | install -Dm755 /dev/stdin ~/.local/bin/appimg-install
 ```
 
 Make sure `~/.local/bin` is in your `PATH`. If it isn't, add this to your `~/.bashrc` or `~/.zshrc`:
