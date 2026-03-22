@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# appimg-install — install or update an AppImage like a native package
+# Usage:
+#   appimg-install <file.AppImage> [name]
+#   appimg-install --remove <name>
+#
+# Examples:
+#   appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
+#   appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage        # name inferred
+#   appimg-install --remove mux
+
+set -euo pipefail
+
+APPIMAGE_DIR="$HOME/.local/share/appimages"
+BIN_DIR="$HOME/.local/bin"
+DESKTOP_DIR="$HOME/.local/share/applications"
+
+usage() {
+    cat >&2 <<EOF
+Usage:
+  appimg-install <file.AppImage> [name]
+  appimg-install --remove <name>
+
+Options:
+  <file.AppImage>   Path to the AppImage file (local file or existing installed name)
+  [name]            Short name for the command / desktop entry (default: derived from filename)
+  --remove <name>   Remove a previously installed AppImage
+
+Examples:
+  appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage
+  appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
+  appimg-install --remove mux
+EOF
+    exit 1
+}
+
+# --- remove mode ---
+if [[ "${1:-}" == "--remove" ]]; then
+    [[ -z "${2:-}" ]] && usage
+    name="$2"
+    removed=0
+
+    if [[ -f "$APPIMAGE_DIR/$name.AppImage" ]]; then
+        rm -f "$APPIMAGE_DIR/$name.AppImage"
+        echo "Removed $APPIMAGE_DIR/$name.AppImage"
+        removed=1
+    fi
+    if [[ -L "$BIN_DIR/$name" ]]; then
+        rm -f "$BIN_DIR/$name"
+        echo "Removed symlink $BIN_DIR/$name"
+        removed=1
+    fi
+    if [[ -f "$DESKTOP_DIR/$name.desktop" ]]; then
+        rm -f "$DESKTOP_DIR/$name.desktop"
+        echo "Removed $DESKTOP_DIR/$name.desktop"
+        removed=1
+    fi
+
+    if [[ $removed -eq 0 ]]; then
+        echo "Nothing found for '$name'." >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+# --- install / update mode ---
+[[ -z "${1:-}" ]] && usage
+[[ "${1:-}" == "--help" || "${1:-}" == "-h" ]] && usage
+
+src="$1"
+
+# Resolve to absolute path
+src="$(realpath -- "$src")"
+
+if [[ ! -f "$src" ]]; then
+    echo "Error: file not found: $src" >&2
+    exit 1
+fi
+
+# Derive name: strip path, version strings, and .AppImage extension
+if [[ -n "${2:-}" ]]; then
+    name="$2"
+else
+    basename_raw="$(basename "$src")"
+    # Remove .AppImage (case-insensitive)
+    no_ext="${basename_raw%.[Aa][Pp][Pp][Ii][Mm][Aa][Gg][Ee]}"
+    # Strip trailing version-like suffixes: -1.2.3, _1.2.3, -x86_64, -aarch64, etc.
+    name="$(echo "$no_ext" | sed -E 's/[-_][0-9]+\.[0-9].*//' | sed -E 's/[-_](x86_64|aarch64|arm64|i386|i686)$//' | tr '[:upper:]' '[:lower:]')"
+fi
+
+if [[ -z "$name" ]]; then
+    echo "Error: could not derive a name. Pass it explicitly as the second argument." >&2
+    exit 1
+fi
+
+dest="$APPIMAGE_DIR/$name.AppImage"
+link="$BIN_DIR/$name"
+desktop="$DESKTOP_DIR/$name.desktop"
+
+# Create dirs
+mkdir -p "$APPIMAGE_DIR" "$BIN_DIR" "$DESKTOP_DIR"
+
+# Copy (not move — keep original intact) and make executable
+cp -f "$src" "$dest"
+chmod +x "$dest"
+
+# Symlink
+ln -sf "$dest" "$link"
+
+# Desktop entry (only write if it doesn't exist; use --update-desktop to overwrite)
+if [[ ! -f "$desktop" ]] || [[ "${UPDATE_DESKTOP:-0}" == "1" ]]; then
+    display_name="$(echo "$name" | sed 's/\b./\u&/g')"   # Title-case
+    cat > "$desktop" <<DEOF
+[Desktop Entry]
+Name=$display_name
+Exec=$dest
+Icon=application-x-executable
+Type=Application
+Categories=Utility;
+DEOF
+    echo "Created $desktop"
+fi
+
+echo "Installed '$name'"
+echo "  AppImage : $dest"
+echo "  Command  : $link"
+echo "  Desktop  : $desktop"
+echo ""
+echo "Update later with the same command — the symlink and .desktop never need changing."
