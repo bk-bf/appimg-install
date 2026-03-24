@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# appimg-install — install or update an AppImage like a native package
+# apkg — install, update, and remove AppImages like a native package
 # Usage:
-#   appimg-install <file.AppImage> [name]
-#   appimg-install --remove <name>
+#   apkg -S <file.AppImage> [name]
+#   apkg -U <file.AppImage> [name]
+#   apkg -R <name>
 #
 # Examples:
-#   appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
-#   appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage        # name inferred
-#   appimg-install --remove mux
+#   apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage mux
+#   apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage        # name inferred
+#   apkg -U ~/Downloads/mux-0.22.0-x86_64.AppImage mux
+#   apkg -R mux
 
 set -euo pipefail
 
@@ -18,26 +20,45 @@ DESKTOP_DIR="$HOME/.local/share/applications"
 usage() {
     cat >&2 <<EOF
 Usage:
-  appimg-install <file.AppImage> [name]
-  appimg-install --remove <name>
+  apkg -S <file.AppImage> [name]   Install or update an AppImage
+  apkg -U <file.AppImage> [name]   Same as -S (install from local file)
+  apkg -R <name>                   Remove a previously installed AppImage
 
 Options:
-  <file.AppImage>   Path to the AppImage file (local file or existing installed name)
-  [name]            Short name for the command / desktop entry (default: derived from filename)
-  --remove <name>   Remove a previously installed AppImage
+  --overwrite-desktop              Force-regenerate the .desktop entry on install/update
 
 Examples:
-  appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage
-  appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
-  appimg-install --remove mux
+  apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage
+  apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage mux
+  apkg -U ~/Downloads/mux-0.22.0-x86_64.AppImage mux
+  apkg -R mux
+  apkg -S ~/Downloads/mux-0.22.0-x86_64.AppImage mux --overwrite-desktop
 EOF
     exit 1
 }
 
+# --- parse flags ---
+mode=""
+overwrite_desktop="${UPDATE_DESKTOP:-0}"  # also honour legacy env var
+
+# First pass: extract mode flag and --overwrite-desktop
+args=()
+for arg in "$@"; do
+    case "$arg" in
+        -S|-U)   mode="install" ;;
+        -R)      mode="remove" ;;
+        --overwrite-desktop) overwrite_desktop=1 ;;
+        -h|--help) usage ;;
+        *) args+=("$arg") ;;
+    esac
+done
+
+[[ -z "$mode" ]] && usage
+
 # --- remove mode ---
-if [[ "${1:-}" == "--remove" ]]; then
-    [[ -z "${2:-}" ]] && usage
-    name="$2"
+if [[ "$mode" == "remove" ]]; then
+    [[ ${#args[@]} -eq 0 ]] && usage
+    name="${args[0]}"
     removed=0
 
     if [[ -f "$APPIMAGE_DIR/$name.AppImage" ]]; then
@@ -64,10 +85,9 @@ if [[ "${1:-}" == "--remove" ]]; then
 fi
 
 # --- install / update mode ---
-[[ -z "${1:-}" ]] && usage
-[[ "${1:-}" == "--help" || "${1:-}" == "-h" ]] && usage
+[[ ${#args[@]} -eq 0 ]] && usage
 
-src="$1"
+src="${args[0]}"
 
 # Resolve to absolute path
 src="$(realpath -- "$src")"
@@ -78,8 +98,8 @@ if [[ ! -f "$src" ]]; then
 fi
 
 # Derive name: strip path, version strings, and .AppImage extension
-if [[ -n "${2:-}" ]]; then
-    name="$2"
+if [[ ${#args[@]} -ge 2 ]]; then
+    name="${args[1]}"
 else
     basename_raw="$(basename "$src")"
     # Remove .AppImage (case-insensitive)
@@ -107,8 +127,8 @@ chmod +x "$dest"
 # Symlink
 ln -sf "$dest" "$link"
 
-# Desktop entry (only write if it doesn't exist; use --update-desktop to overwrite)
-if [[ ! -f "$desktop" ]] || [[ "${UPDATE_DESKTOP:-0}" == "1" ]]; then
+# Desktop entry (only write if it doesn't exist; use --overwrite-desktop to overwrite)
+if [[ ! -f "$desktop" ]] || [[ "$overwrite_desktop" == "1" ]]; then
     display_name="$(echo "$name" | sed 's/\b./\u&/g')"   # Title-case
     cat > "$desktop" <<DEOF
 [Desktop Entry]

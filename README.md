@@ -1,10 +1,10 @@
-# appimg-install
+# apkg
 
 A single bash script to install, update, and remove AppImages like a native package manager — no tools, no daemons, no config files.
 
 ## What it does
 
-Running `appimg-install foo.AppImage` takes care of all three steps in one command:
+Running `apkg -S foo.AppImage` takes care of all three steps in one command:
 
 1. Copies the AppImage to `~/.local/share/appimages/<name>.AppImage` and makes it executable
 2. Creates a symlink at `~/.local/bin/<name>` so it runs from anywhere in the terminal
@@ -15,7 +15,7 @@ When you install a new version later, only the file changes. The symlink and `.d
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bk-bf/appimg-install/main/appimg-install | install -Dm755 /dev/stdin ~/.local/bin/appimg-install
+curl -fsSL https://raw.githubusercontent.com/bk-bf/appimg-install/main/apkg | install -Dm755 /dev/stdin ~/.local/bin/apkg
 ```
 
 Make sure `~/.local/bin` is in your `PATH`. If it isn't, add this to your `~/.bashrc` or `~/.zshrc`:
@@ -27,19 +27,20 @@ export PATH="$HOME/.local/bin:$PATH"
 ## Usage
 
 ```
-appimg-install <file.AppImage> [name]
-appimg-install --remove <name>
+apkg -S <file.AppImage> [name]   Install or update an AppImage
+apkg -U <file.AppImage> [name]   Same as -S (install from local file)
+apkg -R <name>                   Remove a previously installed AppImage
 ```
 
 ### Install
 
 ```bash
 # Name is inferred from the filename (version + arch stripped automatically)
-appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage
+apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage
 # → installs as "mux"
 
 # Or specify the name explicitly
-appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
+apkg -S ~/Downloads/mux-0.21.0-x86_64.AppImage mux
 ```
 
 ### Update
@@ -47,13 +48,15 @@ appimg-install ~/Downloads/mux-0.21.0-x86_64.AppImage mux
 Same command, new file. The symlink and `.desktop` stay untouched:
 
 ```bash
-appimg-install ~/Downloads/mux-0.22.0-x86_64.AppImage mux
+apkg -S ~/Downloads/mux-0.22.0-x86_64.AppImage mux
+# or equivalently
+apkg -U ~/Downloads/mux-0.22.0-x86_64.AppImage mux
 ```
 
 ### Remove
 
 ```bash
-appimg-install --remove mux
+apkg -R mux
 ```
 
 Removes the AppImage, symlink, and `.desktop` entry.
@@ -63,7 +66,7 @@ Removes the AppImage, symlink, and `.desktop` entry.
 By default the `.desktop` file is not overwritten on update. To regenerate it:
 
 ```bash
-UPDATE_DESKTOP=1 appimg-install ~/Downloads/mux-0.22.0-x86_64.AppImage mux
+apkg -S ~/Downloads/mux-0.22.0-x86_64.AppImage mux --overwrite-desktop
 ```
 
 ## Name inference
